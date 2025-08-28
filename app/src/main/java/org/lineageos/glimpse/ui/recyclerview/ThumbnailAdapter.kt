@@ -12,6 +12,7 @@ import android.text.format.DateUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.MotionEvent
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.RequiresApi
@@ -123,6 +124,7 @@ class ThumbnailAdapter : ListAdapter<AlbumViewModel.AlbumContent, RecyclerView.V
     }
 
     inner class ThumbnailViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        private var suppressNextClick = false
         // Views
         private val selectionCheckedImageView =
             itemView.findViewById<ImageView>(R.id.selectionCheckedImageView)
@@ -141,6 +143,8 @@ class ThumbnailAdapter : ListAdapter<AlbumViewModel.AlbumContent, RecyclerView.V
         val itemDetails = object : ItemDetailsLookup.ItemDetails<Media>() {
             override fun getPosition() = bindingAdapterPosition
             override fun getSelectionKey() = media
+            override fun inSelectionHotspot(e: MotionEvent) = false
+            override fun inDragRegion(e: MotionEvent) = true
         }
 
         fun onViewAttachedToWindow() {
@@ -155,8 +159,32 @@ class ThumbnailAdapter : ListAdapter<AlbumViewModel.AlbumContent, RecyclerView.V
             this.media = media
             this.isSelected = isSelected
 
+            itemView.isLongClickable = true
+            itemView.setOnLongClickListener {
+                selectionTracker?.also { tracker ->
+                    if (!tracker.hasSelection() || !tracker.isSelected(media)) {
+                        tracker.select(media)
+                    }
+                }
+                suppressNextClick = true
+                true
+            }
+
             itemView.setOnClickListener {
-                onItemSelected(media)
+                if (suppressNextClick) {
+                    suppressNextClick = false
+                    return@setOnClickListener
+                }
+                selectionTracker?.let { tracker ->
+                    if (tracker.hasSelection()) {
+                        if (tracker.isSelected(media)) tracker.deselect(media)
+                        else tracker.select(media)
+                    } else {
+                        onItemSelected(media)
+                    }
+                } ?: run {
+                    onItemSelected(media)
+                }
             }
 
             thumbnailImageView.load(
